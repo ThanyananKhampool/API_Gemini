@@ -19,7 +19,7 @@ app = Flask(__name__)
 
 # ฟังก์ชันหลักในการใช้ Gemini API
 def generate_answer(question):
-    prompt = f"คุณคือผู้ให้คำแนะนำ เกี่ยวกับเพลง โดยค้นหาและแนะนำเพลง พร้อมลิ้งyoutubeด้วย ได้ทั้งไทยและสากล {question}"
+    prompt = f"คุณคือผู้ให้คำแนะนำ เกี่ยวกับเพลง โดยค้นหาและแนะนำเพลง พร้อมลิ้งyoutubeด้วย ได้ทั้งไทยและสากล และบอกความรู้สึกว่าเพลงนี้เหมาะกับคนฟังที่มีความรู้สึกแบบใด{question}"
     response = client.models.generate_content(
         model="gemini-2.0-flash",  # เลือกโมเดลที่ต้องการ
         contents=[prompt]  # ส่งคำถามที่มี prompt ไปยังโมเดล
