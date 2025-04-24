@@ -9,8 +9,8 @@ from datetime import datetime
 import random
 
 # LINE API Access Token และ Channel Secret
-CHANNEL_ACCESS_TOKEN = 'YOUR_LINE_CHANNEL_ACCESS_TOKEN'
-CHANNEL_SECRET = 'YOUR_LINE_CHANNEL_SECRET'
+CHANNEL_ACCESS_TOKEN = 'Oz6x3Zse8dmKO5HWmiRy3aCa26v1aiRJWAFIcGXp/kvSE58NBWARFg1AUf0beFKgqj/+KavL0VJU6wtGOwc3Zf0UfgnAOLJnEBmUwExf6rbCBPz2wplzFtOUVDxo8HJ7RM7En2r4qYg9eBnQeeeWvQdB04t89/1O/w1cDnyilFU='
+CHANNEL_SECRET = 'c9810af033f3b71c3575127651aa3045'
 
 # สร้าง client สำหรับเชื่อมต่อกับ Gemini API
 client = genai.Client(api_key="YOUR_GOOGLE_API_KEY")
