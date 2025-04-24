@@ -1,7 +1,8 @@
 from flask import Flask, request, abort
+from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import *
-from google import genai
+import genai  # ใช้ไลบรารีนี้แทนการใช้ google.genai
 import json
 
 # LINE API Credentials
@@ -18,9 +19,8 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-# Gemini API client
-genai.configure(api_key=GENAI_API_KEY)
-client = genai.GenerativeModel("gemini-pro")
+# สร้าง Client สำหรับเชื่อมต่อกับ Gemini API
+client = genai.Client(api_key=GENAI_API_KEY)
 
 # ฟังก์ชันเรียก Gemini API
 def generate_answer(question):
@@ -41,7 +41,7 @@ def generate_answer(question):
 
 คำถาม: {question}
 """
-    response = client.generate_content(prompt)
+    response = client.models.generate_content(model="gemini-pro", contents=[prompt])
     print("🧠 Gemini raw response:\n", response.text)
     return response.text
 
@@ -79,5 +79,20 @@ def handle_message(event):
         print("⚠️ JSON parse error:", e)
         message = TextSendMessage(text="❌ ไม่สามารถแสดงกล่องเพลงได้\nGemini ตอบว่า:\n" + response_text)
 
-    line_bot_api.reply
+    line_bot_api.reply_message(event.reply_token, message)
 
+# Webhook route
+@app.route("/callback", methods=['POST'])
+def callback():
+    signature = request.headers['X-Line-Signature']
+    body = request.get_data(as_text=True)
+    try:
+        handler.handle(body, signature)
+    except Exception as e:
+        print("❌ Webhook error:", e)
+        abort(400)
+    return 'OK'
+
+# เริ่ม Flask server
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5000)
