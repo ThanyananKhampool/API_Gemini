@@ -1,98 +1,59 @@
-from flask import Flask, request, abort
-from flask import Flask, request, abort
+from google import genai
 from linebot import LineBotApi, WebhookHandler
-from linebot.models import *
-import genai  # ใช้ไลบรารีนี้แทนการใช้ google.genai
-import json
+from linebot.models import TextSendMessage, MessageEvent, TextMessage
+from flask import Flask, request, abort
 
-# LINE API Credentials
-CHANNEL_ACCESS_TOKEN = 'YOUR_CHANNEL_ACCESS_TOKEN'
-CHANNEL_SECRET = 'YOUR_CHANNEL_SECRET'
+# LINE API Access Token และ Channel Secret
+CHANNEL_ACCESS_TOKEN = 'Oz6x3Zse8dmKO5HWmiRy3aCa26v1aiRJWAFIcGXp/kvSE58NBWARFg1AUf0beFKgqj/+KavL0VJU6wtGOwc3Zf0UfgnAOLJnEBmUwExf6rbCBPz2wplzFtOUVDxo8HJ7RM7En2r4qYg9eBnQeeeWvQdB04t89/1O/w1cDnyilFU='
+CHANNEL_SECRET = 'c9810af033f3b71c3575127651aa3045'
 
-# Gemini API Key
-GENAI_API_KEY = 'YOUR_GEMINI_API_KEY'
+# สร้าง client สำหรับเชื่อมต่อกับ Gemini API
+client = genai.Client(api_key="AIzaSyDo2U64Wt4Kwcq7ei1U1TjeTkmmVaaYz1I")
+
+# สร้าง LineBotApi และ WebhookHandler
+line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
+handler = WebhookHandler(CHANNEL_SECRET)
 
 # สร้าง Flask app
 app = Flask(__name__)
 
-# LINE API
-line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(CHANNEL_SECRET)
-
-# สร้าง Client สำหรับเชื่อมต่อกับ Gemini API
-client = genai.Client(api_key=GENAI_API_KEY)
-
-# ฟังก์ชันเรียก Gemini API
+# ฟังก์ชันหลักในการใช้ Gemini API
 def generate_answer(question):
-    prompt = f"""
-คุณคือผู้ช่วยแนะนำเพลง ห้ามพูดคุยหรืออธิบาย
-ตอบกลับเฉพาะในรูปแบบ JSON เท่านั้น
-ตัวอย่าง:
-[
-  {{
-    "title": "Someone Like You - Adele",
-    "url": "https://www.youtube.com/watch?v=hLQl3WQQoQ0"
-  }},
-  {{
-    "title": "Let Her Go - Passenger",
-    "url": "https://www.youtube.com/watch?v=RBumgq5yVrA"
-  }}
-]
-
-คำถาม: {question}
-"""
-    response = client.models.generate_content(model="gemini-pro", contents=[prompt])
-    print("🧠 Gemini raw response:\n", response.text)
+    prompt = f"คุณคือผู้ให้คำแนะนำ เกี่ยวกับเพลง โดยค้นหาและแนะนำเพลง พร้อมลิ้งyoutubeด้วย ได้ทั้งไทยและสากล {question}"
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",  # เลือกโมเดลที่ต้องการ
+        contents=[prompt]  # ส่งคำถามที่มี prompt ไปยังโมเดล
+    )
     return response.text
 
-# ฟังก์ชันรับข้อความจากผู้ใช้
+# ฟังก์ชันจัดการข้อความที่ได้รับจากผู้ใช้
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_message = event.message.text
-    response_text = generate_answer(user_message)
+    user_id = event.source.user_id  # ได้ User ID ของผู้ใช้
 
-    try:
-        songs = json.loads(response_text)
+    print(f"Received message: {user_message} from {user_id}")
 
-        columns = []
-        for song in songs[:10]:  # จำกัดสูงสุด 10 กล่อง
-            title = song.get("title", "ไม่ทราบชื่อ")[:40]
-            url = song.get("url", "#")
-            video_id = url.split("v=")[-1][:11]
-            thumbnail = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+    # ส่งข้อความที่ผู้ใช้ถามไปยัง Gemini API เพื่อขอคำตอบ
+    answer = generate_answer(user_message)
+    
+    # ส่งคำตอบกลับไปยังผู้ใช้ใน LINE
+    response_message = f"คำถาม: {user_message}\nคำตอบ: {answer}"
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_message))
 
-            columns.append(
-                CarouselColumn(
-                    thumbnail_image_url=thumbnail,
-                    title=title,
-                    text="คลิกเพื่อฟังบน YouTube",
-                    actions=[URIAction(label="ฟังเพลง", uri=url)]
-                )
-            )
-
-        message = TemplateSendMessage(
-            alt_text="แนะนำเพลงที่คุณอาจชอบ",
-            template=CarouselTemplate(columns=columns)
-        )
-
-    except Exception as e:
-        print("⚠️ JSON parse error:", e)
-        message = TextSendMessage(text="❌ ไม่สามารถแสดงกล่องเพลงได้\nGemini ตอบว่า:\n" + response_text)
-
-    line_bot_api.reply_message(event.reply_token, message)
-
-# Webhook route
+# Webhook URL สำหรับรับข้อความจาก LINE
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
+
     try:
         handler.handle(body, signature)
     except Exception as e:
-        print("❌ Webhook error:", e)
+        print("Error:", e)
         abort(400)
+
     return 'OK'
 
-# เริ่ม Flask server
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
