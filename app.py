@@ -1,6 +1,6 @@
 from google import genai
 from linebot import LineBotApi, WebhookHandler
-from linebot.models import TextSendMessage, MessageEvent, TextMessage, URIAction, CarouselColumn, CarouselTemplate, TemplateSendMessage
+from linebot.models import TextSendMessage, MessageEvent, TextMessage
 from flask import Flask, request, abort
 
 # LINE API Access Token และ Channel Secret
@@ -54,36 +54,18 @@ def handle_message(event):
         song2 = {"title": "เพลง B", "link": "https://www.youtube.com/watch?v=song_link_B", "reason": "พูดถึงการก้าวผ่านความกลัว"}
         song3 = {"title": "เพลง C", "link": "https://www.youtube.com/watch?v=song_link_C", "reason": "เต็มไปด้วยอารมณ์ของการเริ่มต้นใหม่"}
 
-        # สร้าง Carousel Template สำหรับแสดงเพลงพร้อมลิงค์
-        carousel_columns = [
-            CarouselColumn(
-                title=song1['title'],
-                text=song1['reason'],
-                actions=[URIAction(label="ฟังเพลงนี้", uri=song1['link'])]
-            ),
-            CarouselColumn(
-                title=song2['title'],
-                text=song2['reason'],
-                actions=[URIAction(label="ฟังเพลงนี้", uri=song2['link'])]
-            ),
-            CarouselColumn(
-                title=song3['title'],
-                text=song3['reason'],
-                actions=[URIAction(label="ฟังเพลงนี้", uri=song3['link'])]
-            )
-        ]
-
-        # สร้าง Template ส่งข้อความ Carousel
-        carousel_template = CarouselTemplate(columns=carousel_columns)
-        template_message = TemplateSendMessage(
-            alt_text='เพลงที่แนะนำสำหรับคุณ',
-            template=carousel_template
+        # สร้างข้อความแนะนำเพลงพร้อมลิงค์
+        response_message = (
+            f"🎧 เพลงที่แนะนำสำหรับคุณ:\n\n"
+            f"1. {song1['title']} - {song1['reason']}\nฟังที่นี่: {song1['link']}\n\n"
+            f"2. {song2['title']} - {song2['reason']}\nฟังที่นี่: {song2['link']}\n\n"
+            f"3. {song3['title']} - {song3['reason']}\nฟังที่นี่: {song3['link']}\n"
         )
 
-        # ส่งข้อความ Carousel ไปยัง LINE
+        # ส่งข้อความที่มีลิงค์ให้ผู้ใช้
         line_bot_api.reply_message(
             event.reply_token,
-            template_message
+            TextSendMessage(text=response_message)
         )
 
     except Exception as e:
