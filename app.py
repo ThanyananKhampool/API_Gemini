@@ -1,6 +1,6 @@
 from google import genai
 from linebot import LineBotApi, WebhookHandler
-from linebot.models import TextSendMessage, MessageEvent, TextMessage
+from linebot.models import TextSendMessage, MessageEvent, TextMessage, URIAction, CarouselColumn, CarouselTemplate, TemplateSendMessage
 from flask import Flask, request, abort
 
 # LINE API Access Token และ Channel Secret
@@ -49,17 +49,51 @@ def handle_message(event):
         answer = generate_answer(user_message)
         print("[🧠 Gemini response]:", answer)
 
-        # ส่งคำตอบกลับไปยังผู้ใช้ใน LINE
-        response_message = f"🎧 เพลงที่เหมาะสมกับอารมณ์ '{user_message}':\n\n{answer.strip()}"
+        # กำหนดเพลงที่แนะนำและลิงค์ YouTube
+        song1 = {"title": "เพลง A", "link": "https://www.youtube.com/watch?v=song_link_A", "reason": "สะท้อนการค้นหาตัวตนในวัยรุ่น"}
+        song2 = {"title": "เพลง B", "link": "https://www.youtube.com/watch?v=song_link_B", "reason": "พูดถึงการก้าวผ่านความกลัว"}
+        song3 = {"title": "เพลง C", "link": "https://www.youtube.com/watch?v=song_link_C", "reason": "เต็มไปด้วยอารมณ์ของการเริ่มต้นใหม่"}
+
+        # สร้าง Carousel Template สำหรับแสดงเพลงพร้อมลิงค์
+        carousel_columns = [
+            CarouselColumn(
+                title=song1['title'],
+                text=song1['reason'],
+                actions=[URIAction(label="ฟังเพลงนี้", uri=song1['link'])]
+            ),
+            CarouselColumn(
+                title=song2['title'],
+                text=song2['reason'],
+                actions=[URIAction(label="ฟังเพลงนี้", uri=song2['link'])]
+            ),
+            CarouselColumn(
+                title=song3['title'],
+                text=song3['reason'],
+                actions=[URIAction(label="ฟังเพลงนี้", uri=song3['link'])]
+            )
+        ]
+
+        # สร้าง Template ส่งข้อความ Carousel
+        carousel_template = CarouselTemplate(columns=carousel_columns)
+        template_message = TemplateSendMessage(
+            alt_text='เพลงที่แนะนำสำหรับคุณ',
+            template=carousel_template
+        )
+
+        # ส่งข้อความ Carousel ไปยัง LINE
+        line_bot_api.reply_message(
+            event.reply_token,
+            template_message
+        )
 
     except Exception as e:
         print("❌ ERROR:", e)
         response_message = f"เกิดข้อผิดพลาด: {e}"
 
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=response_message)
-    )
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=response_message)
+        )
 
 # Webhook URL สำหรับรับข้อความจาก LINE
 @app.route("/callback", methods=['POST'])
