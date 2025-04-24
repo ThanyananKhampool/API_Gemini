@@ -1,4 +1,4 @@
-rom google import genai
+from google import genai
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import (
     TextSendMessage, MessageEvent, TextMessage,
