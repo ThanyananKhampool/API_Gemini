@@ -1,8 +1,8 @@
-from google import genai
+import re
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import TextSendMessage, MessageEvent, TextMessage, FlexSendMessage
 from flask import Flask, request, abort
-import re
+from google import genai
 
 # LINE API Access Token และ Channel Secret
 CHANNEL_ACCESS_TOKEN = 'Oz6x3Zse8dmKO5HWmiRy3aCa26v1aiRJWAFIcGXp/kvSE58NBWARFg1AUf0beFKgqj/+KavL0VJU6wtGOwc3Zf0UfgnAOLJnEBmUwExf6rbCBPz2wplzFtOUVDxo8HJ7RM7En2r4qYg9eBnQeeeWvQdB04t89/1O/w1cDnyilFU='
@@ -13,7 +13,7 @@ client = genai.Client(api_key="AIzaSyDo2U64Wt4Kwcq7ei1U1TjeTkmmVaaYz1I")
 
 # สร้าง LineBotApi และ WebhookHandler
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(CHANNEL_SECRET)  # เรียกใช้ WebhookHandler ที่นี่
+handler = WebhookHandler(CHANNEL_SECRET)
 
 # สร้าง Flask app
 app = Flask(__name__)
@@ -57,7 +57,7 @@ def create_bubble(index, title, url, artist=None):
                     "weight": "bold",
                     "size": "xl",
                     "wrap": True,
-                    "color": "#E91E63"
+                    "color": "#E91E63"  # ใช้สีชมพู
                 },
                 {
                     "type": "text",
@@ -81,7 +81,7 @@ def create_bubble(index, title, url, artist=None):
                 {
                     "type": "button",
                     "style": "primary",
-                    "color": "#E91E63",
+                    "color": "#E91E63",  # ใช้สีชมพู
                     "action": {
                         "type": "uri",
                         "label": "🎧 ฟังเพลง",
