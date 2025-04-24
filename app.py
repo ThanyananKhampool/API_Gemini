@@ -1,6 +1,10 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
-from linebot.models import TextSendMessage, MessageEvent, TextMessage
+from linebot.models import (
+    TextMessage, MessageEvent, FlexSendMessage,
+    BubbleContainer, BoxComponent, TextComponent,
+    URIAction, ButtonComponent
+)
 from google import genai
 
 # LINE API Access Token และ Channel Secret
@@ -20,7 +24,7 @@ app = Flask(__name__)
 # ฟังก์ชันหลักในการใช้ Gemini API เพื่อสร้างข้อความแนะนำเพลงในรูปแบบกล่องโปรโมชัน
 def generate_answer(question):
     prompt = f"""
-คุณคือผู้ช่วยแนะนำเพลงที่ตอบเป็นข้อความโปรโมชันแบบสดใส เช่นร้านค้าแฟชั่น
+คุณคือผู้ช่วยแนะนำเพลงที่ตอบเป็นข้อความโปรโมชันแบบสดใส 
 - ตอบแบบใส่อิโมจิ 🎵🔥❤️✨
 - มีหัวข้อชัดเจน เช่น 🎧 เพลงแนะนำวันนี้ 🎧
 - แนะนำเพลง 2-3 เพลง พร้อมลิงก์ YouTube
@@ -37,6 +41,43 @@ def generate_answer(question):
     )
     return response.text
 
+# ฟังก์ชันแปลงข้อความที่ได้จาก Gemini ให้กลายเป็น Flex Message
+
+def create_flex_message(answer_text):
+    lines = answer_text.strip().split("\n")[1:]  # ข้ามบรรทัดแรกหัวข้อ
+    contents = []
+
+    for line in lines:
+        if "👉" in line:
+            title, link = line.split("👉")
+            contents.append(
+                BoxComponent(
+                    layout="horizontal",
+                    contents=[
+                        TextComponent(text=title.strip(), size="sm", wrap=True, flex=3),
+                        ButtonComponent(
+                            style="link",
+                            height="sm",
+                            action=URIAction(label="ฟังเลย", uri=link.strip()),
+                            flex=1
+                        )
+                    ],
+                    spacing="md",
+                    margin="md"
+                )
+            )
+
+    bubble = BubbleContainer(
+        body=BoxComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(text="🎧 เพลงแนะนำวันนี้ 🎧", weight="bold", size="md", color="#1DB954"),
+                *contents
+            ]
+        )
+    )
+    return FlexSendMessage(alt_text="แนะนำเพลงมาแล้วจ้า~", contents=bubble)
+
 # ฟังก์ชันจัดการข้อความจากผู้ใช้ LINE
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -48,10 +89,12 @@ def handle_message(event):
     # ส่งคำถามไปยัง Gemini เพื่อขอคำตอบ
     answer = generate_answer(user_message)
 
-    # ตอบกลับเป็นกล่องข้อความ
+    # ตอบกลับด้วย Flex Message
+    flex_msg = create_flex_message(answer)
+
     line_bot_api.reply_message(
         event.reply_token,
-        TextSendMessage(text=answer)
+        flex_msg
     )
 
 # Webhook endpoint
