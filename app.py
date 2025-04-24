@@ -13,7 +13,7 @@ CHANNEL_ACCESS_TOKEN = 'Oz6x3Zse8dmKO5HWmiRy3aCa26v1aiRJWAFIcGXp/kvSE58NBWARFg1A
 CHANNEL_SECRET = 'c9810af033f3b71c3575127651aa3045'
 
 # === Gemini API Key ===
-client = genai.Client(api_key="YOUR_GEMINI_API_KEY")
+client = genai.Client(api_key="AIzaSyDo2U64Wt4Kwcq7ei1U1TjeTkmmVaaYz1I")
 
 # === LINE SDK Setup ===
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
