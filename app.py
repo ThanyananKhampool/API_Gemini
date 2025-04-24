@@ -1,7 +1,10 @@
-from google import genai
-from linebot import LineBotApi, WebhookHandler
-from linebot.models import TextSendMessage, MessageEvent, TextMessage
 from flask import Flask, request, abort
+from linebot import LineBotApi, WebhookHandler
+from linebot.models import (
+    MessageEvent, TextMessage, FlexSendMessage, TextSendMessage
+)
+from google import genai
+import re
 
 # LINE API Access Token และ Channel Secret
 CHANNEL_ACCESS_TOKEN = 'Oz6x3Zse8dmKO5HWmiRy3aCa26v1aiRJWAFIcGXp/kvSE58NBWARFg1AUf0beFKgqj/+KavL0VJU6wtGOwc3Zf0UfgnAOLJnEBmUwExf6rbCBPz2wplzFtOUVDxo8HJ7RM7En2r4qYg9eBnQeeeWvQdB04t89/1O/w1cDnyilFU='
@@ -19,10 +22,10 @@ app = Flask(__name__)
 
 # ฟังก์ชันหลักในการใช้ Gemini API
 def generate_answer(question):
-    prompt = f"คุณคือผู้ให้คำแนะนำ เกี่ยวกับเพลง โดยค้นหาและแนะนำเพลง พร้อมลิ้งyoutubeด้วย ได้ทั้งไทยและสากล และบอกความรู้สึกว่าเพลงนี้เหมาะกับคนฟังที่มีความรู้สึกแบบใด{question}"
+    prompt = f"คุณคือผู้ให้คำแนะนำเกี่ยวกับเพลง แนะนำเพลงจากคำถามนี้ พร้อมลิงก์ YouTube ด้วย: {question}"
     response = client.models.generate_content(
-        model="gemini-2.0-flash",  # เลือกโมเดลที่ต้องการ
-        contents=[prompt]  # ส่งคำถามที่มี prompt ไปยังโมเดล
+        model="gemini-2.0-flash",
+        contents=[prompt]
     )
     return response.text
 
@@ -30,18 +33,81 @@ def generate_answer(question):
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_message = event.message.text
-    user_id = event.source.user_id  # ได้ User ID ของผู้ใช้
+    user_id = event.source.user_id
 
     print(f"Received message: {user_message} from {user_id}")
 
-    # ส่งข้อความที่ผู้ใช้ถามไปยัง Gemini API เพื่อขอคำตอบ
+    # ดึงคำตอบจาก Gemini
     answer = generate_answer(user_message)
-    
-    # ส่งคำตอบกลับไปยังผู้ใช้ใน LINE
-    response_message = f"คำถาม: {user_message}\nคำตอบ: {answer}"
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_message))
 
-# Webhook URL สำหรับรับข้อความจาก LINE
+    # หา YouTube URL
+    youtube_links = re.findall(r'(https?://(?:www\.)?youtu(?:\.be|be\.com)/[^\s]+)', answer)
+    youtube_url = youtube_links[0] if youtube_links else None
+
+    if youtube_url:
+        video_id = youtube_url.split("/")[-1].split("?v=")[-1]
+        thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+
+        flex_message = FlexSendMessage(
+            alt_text="แนะนำเพลงจาก Gemini",
+            contents={
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": thumbnail_url,
+                    "size": "full",
+                    "aspectRatio": "16:9",
+                    "aspectMode": "cover",
+                    "action": {
+                        "type": "uri",
+                        "uri": youtube_url
+                    }
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "🎧 เพลงที่แนะนำ",
+                            "weight": "bold",
+                            "size": "xl"
+                        },
+                        {
+                            "type": "text",
+                            "text": user_message,
+                            "wrap": True,
+                            "color": "#666666",
+                            "size": "sm"
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "link",
+                            "height": "sm",
+                            "action": {
+                                "type": "uri",
+                                "label": "ฟังบน YouTube",
+                                "uri": youtube_url
+                            }
+                        }
+                    ],
+                    "flex": 0
+                }
+            }
+        )
+        line_bot_api.reply_message(event.reply_token, flex_message)
+    else:
+        # ถ้าไม่มีลิงก์ YouTube ส่งข้อความปกติ
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="ขออภัย ไม่พบลิงก์ YouTube จากคำตอบ"))
+
+# Webhook สำหรับรับข้อความจาก LINE
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
