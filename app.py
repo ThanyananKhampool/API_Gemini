@@ -9,11 +9,11 @@ from datetime import datetime
 import random
 
 # LINE API Access Token และ Channel Secret
-CHANNEL_ACCESS_TOKEN = 'Oz6x3Zse8dmKO5HWmiRy3aCa26v1aiRJWAFIcGXp/kvSE58NBWARFg1AUf0beFKgqj/+KavL0VJU6wtGOwc3Zf0UfgnAOLJnEBmUwExf6rbCBPz2wplzFtOUVDxo8HJ7RM7En2r4qYg9eBnQeeeWvQdB04t89/1O/w1cDnyilFU='
-CHANNEL_SECRET = 'c9810af033f3b71c3575127651aa3045'
+CHANNEL_ACCESS_TOKEN = 'YOUR_LINE_CHANNEL_ACCESS_TOKEN'
+CHANNEL_SECRET = 'YOUR_LINE_CHANNEL_SECRET'
 
 # สร้าง client สำหรับเชื่อมต่อกับ Gemini API
-client = genai.Client(api_key="AIzaSyDo2U64Wt4Kwcq7ei1U1TjeTkmmVaaYz1I")
+client = genai.Client(api_key="YOUR_GOOGLE_API_KEY")
 
 # สร้าง LineBotApi และ WebhookHandler
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
@@ -25,9 +25,12 @@ app = Flask(__name__)
 # ฟังก์ชันหลักในการใช้ Gemini API
 def generate_answer(question):
     prompt = (
-        f"แนะนำเพลง 3 เพลง ที่เหมาะกับคำว่า: '{question}' "
+        f"แนะนำเพลง 3 เพลง ที่เหมาะกับคำว่า: '{question}'\n"
         f"ให้ตอบกลับเป็น format ต่อไปนี้เท่านั้น (ห้ามเขียนอย่างอื่น):\n\n"
-        f"เพลง: <ชื่อเพลง>\nเหตุผล: <สั้นๆ 1-2 บรรทัด>\nลิงก์: <ลิงก์ YouTube>\n\n"
+        f"เพลง: <ชื่อเพลง>\n"
+        f"เหตุผล (ไทย): <สั้นๆ 1-2 บรรทัด>\n"
+        f"Reason (English): <1-2 short sentences>\n"
+        f"ลิงก์: <ลิงก์ YouTube>\n\n"
         f"ทำแบบนี้ 3 ชุด ห้ามตอบเกิน และห้ามใส่ prefix หรือข้อความอื่นนอกจาก format นี้"
     )
     response = client.models.generate_content(
@@ -41,11 +44,17 @@ def parse_gemini_response(text):
     songs = []
     for block in text.strip().split("\n\n"):
         lines = block.strip().split("\n")
-        if len(lines) >= 3:
+        if len(lines) >= 4:
             title = lines[0].split("เพลง:")[1].strip()
-            desc = lines[1].split("เหตุผล:")[1].strip()
-            url = lines[2].split("ลิงก์:")[1].strip()
-            songs.append({"title": title, "desc": desc, "url": url})
+            desc_th = lines[1].split("เหตุผล (ไทย):")[1].strip()
+            desc_en = lines[2].split("Reason (English):")[1].strip()
+            url = lines[3].split("ลิงก์:")[1].strip()
+            songs.append({
+                "title": title,
+                "desc_th": desc_th,
+                "desc_en": desc_en,
+                "url": url
+            })
     return songs
 
 # ฟังก์ชันสร้าง Bubble
@@ -68,10 +77,17 @@ def build_song_bubble(song):
                 },
                 {
                     "type": "text",
-                    "text": song["desc"],
+                    "text": f"🇹🇭 {song['desc_th']}",
                     "wrap": True,
                     "size": "sm",
                     "color": "#666666"
+                },
+                {
+                    "type": "text",
+                    "text": f"🇬🇧 {song['desc_en']}",
+                    "wrap": True,
+                    "size": "sm",
+                    "color": "#999999"
                 }
             ]
         },
@@ -109,14 +125,14 @@ def create_carousel_message(answer_text):
 # ฟังก์ชันจัดการข้อความที่ได้รับจากผู้ใช้
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_message = event.message.text.lower()
+    user_message = event.message.text
     user_id = event.source.user_id
 
     print(f"Received message: {user_message} from {user_id}")
 
     # คำทักทายเบื้องต้น
     greetings = ['สวัสดี', 'hello', 'hi', 'หวัดดี', 'เฮลโหล', 'ไง']
-    if any(greet in user_message for greet in greetings):
+    if any(greet in user_message.lower() for greet in greetings):
         hour = datetime.now().hour
         if 5 <= hour < 12:
             time_greeting = "สวัสดีตอนเช้าครับ ☀️"
