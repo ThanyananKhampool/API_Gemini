@@ -3,6 +3,8 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.models import TextSendMessage, MessageEvent, TextMessage
 from flask import Flask, request, abort
 
+import json
+
 # LINE API Access Token และ Channel Secret
 CHANNEL_ACCESS_TOKEN = 'Oz6x3Zse8dmKO5HWmiRy3aCa26v1aiRJWAFIcGXp/kvSE58NBWARFg1AUf0beFKgqj/+KavL0VJU6wtGOwc3Zf0UfgnAOLJnEBmUwExf6rbCBPz2wplzFtOUVDxo8HJ7RM7En2r4qYg9eBnQeeeWvQdB04t89/1O/w1cDnyilFU='
 CHANNEL_SECRET = 'c9810af033f3b71c3575127651aa3045'
@@ -19,10 +21,18 @@ app = Flask(__name__)
 
 # ฟังก์ชันหลักในการใช้ Gemini API
 def generate_answer(question):
-    prompt = f"คุณคือผู้ให้คำแนะนำ เกี่ยวกับเพลง โดยค้นหาและแนะนำเพลง พร้อมลิ้งyoutubeด้วย ได้ทั้งไทยและสากล {question}"
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",  # เลือกโมเดลที่ต้องการ
-        contents=[prompt]  # ส่งคำถามที่มี prompt ไปยังโมเดล
+    prompt = (
+        f"แนะนำเพลงที่สื่ออารมณ์หรือความรู้สึกเกี่ยวกับ '{question}' "
+        f"จำนวน 3 เพลง (ไทยหรือสากลก็ได้) ให้แสดงผลในรูปแบบ JSON เท่านั้น "
+        f"โครงสร้าง JSON:\n"
+        f"[{{\"title\": \"ชื่อเพลง\", \"artist\": \"ศิลปิน\", \"youtube_url\": \"ลิงก์ YouTube\", \"reason\": \"เหตุผลที่เลือกเพลงนี้\"}}, ...]\n"
+        f"ตัวอย่าง: "
+        f"[{{\"title\": \"Lover\", \"artist\": \"Taylor Swift\", \"youtube_url\": \"https://youtu.be/1i8oYSe2f9c\", \"reason\": \"เพลงนี้เต็มไปด้วยความรักโรแมนติกและเสียงหวานของ Taylor\"}}]"
+    )
+
+    response = client.generate_content(
+        model="gemini-2.0-flash",
+        contents=[{"role": "user", "parts": [prompt]}]
     )
     return response.text
 
@@ -30,16 +40,26 @@ def generate_answer(question):
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_message = event.message.text
-    user_id = event.source.user_id  # ได้ User ID ของผู้ใช้
+    user_id = event.source.user_id
 
     print(f"Received message: {user_message} from {user_id}")
 
-    # ส่งข้อความที่ผู้ใช้ถามไปยัง Gemini API เพื่อขอคำตอบ
-    answer = generate_answer(user_message)
-    
-    # ส่งคำตอบกลับไปยังผู้ใช้ใน LINE
-    response_message = f"คำถาม: {user_message}\nคำตอบ: {answer}"
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_message))
+    try:
+        answer = generate_answer(user_message)
+
+        try:
+            songs = json.loads(answer)
+            formatted = ""
+            for i, song in enumerate(songs, 1):
+                formatted += f"{i}. {song['title']} - {song['artist']}\n{song['youtube_url']}\n💡 {song['reason']}\n\n"
+            response_message = f"🎧 แนะนำเพลงสำหรับ '{user_message}' 🎶\n\n{formatted}"
+        except json.JSONDecodeError:
+            response_message = f"⚠️ ขอโทษครับ ข้อมูลที่ได้จาก AI ไม่อยู่ในรูปแบบ JSON ที่ต้องการ:\n\n{answer}"
+
+    except Exception as e:
+        response_message = f"❌ เกิดข้อผิดพลาด: {e}"
+
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_message.strip()))
 
 # Webhook URL สำหรับรับข้อความจาก LINE
 @app.route("/callback", methods=['POST'])
