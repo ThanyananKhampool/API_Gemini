@@ -1,15 +1,14 @@
-import re
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import TextSendMessage, MessageEvent, TextMessage, FlexSendMessage
 from flask import Flask, request, abort
 from google import genai
 
 # LINE API Access Token และ Channel Secret
-CHANNEL_ACCESS_TOKEN = 'Oz6x3Zse8dmKO5HWmiRy3aCa26v1aiRJWAFIcGXp/kvSE58NBWARFg1AUf0beFKgqj/+KavL0VJU6wtGOwc3Zf0UfgnAOLJnEBmUwExf6rbCBPz2wplzFtOUVDxo8HJ7RM7En2r4qYg9eBnQeeeWvQdB04t89/1O/w1cDnyilFU='
-CHANNEL_SECRET = 'c9810af033f3b71c3575127651aa3045'
+CHANNEL_ACCESS_TOKEN = 'YOUR_CHANNEL_ACCESS_TOKEN'
+CHANNEL_SECRET = 'YOUR_CHANNEL_SECRET'
 
 # สร้าง client สำหรับเชื่อมต่อกับ Gemini API
-client = genai.Client(api_key="AIzaSyDo2U64Wt4Kwcq7ei1U1TjeTkmmVaaYz1I")
+client = genai.Client(api_key="YOUR_API_KEY")
 
 # สร้าง LineBotApi และ WebhookHandler
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
@@ -18,16 +17,16 @@ handler = WebhookHandler(CHANNEL_SECRET)
 # สร้าง Flask app
 app = Flask(__name__)
 
-# ฟังก์ชันสร้างคำตอบจาก Gemini
+# ฟังก์ชันหลักในการใช้ Gemini API
 def generate_answer(question):
-    prompt = f"แนะนำเพลงจากคำถามนี้: {question} โดยให้ผลลัพธ์เป็น 3 เพลงขึ้นไป ในรูปแบบ: ชื่อเพลง: [ชื่อเพลง] ศิลปิน: [ชื่อศิลปิน] ลิงก์: [ลิงก์ YouTube]"
+    prompt = f"คุณคือผู้ให้คำแนะนำ เกี่ยวกับเพลง โดยค้นหาและแนะนำเพลง พร้อมลิ้งyoutubeด้วย ได้ทั้งไทยและสากล {question}"
     response = client.models.generate_content(
         model="gemini-2.0-flash",  # เลือกโมเดลที่ต้องการ
         contents=[prompt]  # ส่งคำถามที่มี prompt ไปยังโมเดล
     )
     return response.text
 
-# ฟังก์ชันสร้าง Flex Bubble เพลง
+# ฟังก์ชันสำหรับการสร้าง Flex Bubble ที่แสดงเพลง
 def create_bubble(index, title, url, artist=None):
     video_id = url.split("/")[-1].split("?v=")[-1]
     thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
@@ -57,19 +56,14 @@ def create_bubble(index, title, url, artist=None):
                     "weight": "bold",
                     "size": "xl",
                     "wrap": True,
-                    "color": "#E91E63"  # ใช้สีชมพู
+                    "color": "#E91E63"  # สีชมพู
                 },
                 {
                     "type": "text",
-                    "text": f"👤 {artist}",
+                    "text": f"ศิลปิน: {artist}",
                     "size": "sm",
                     "color": "#888888",
-                    "wrap": True,
-                    "action": {
-                        "type": "message",
-                        "label": "ดูศิลปิน",
-                        "text": f"ดูศิลปิน {artist}"
-                    }
+                    "wrap": True
                 }
             ]
         },
@@ -81,10 +75,10 @@ def create_bubble(index, title, url, artist=None):
                 {
                     "type": "button",
                     "style": "primary",
-                    "color": "#E91E63",  # ใช้สีชมพู
+                    "color": "#E91E63",  # สีชมพู
                     "action": {
                         "type": "uri",
-                        "label": "🎧 ฟังเพลง",
+                        "label": "ฟังเพลง",
                         "uri": url
                     }
                 },
@@ -93,7 +87,7 @@ def create_bubble(index, title, url, artist=None):
                     "style": "secondary",
                     "action": {
                         "type": "uri",
-                        "label": "📄 ดูเนื้อเพลง",
+                        "label": "ดูเนื้อเพลง",
                         "uri": f"https://www.google.com/search?q=lyrics+{title}+{artist}"
                     }
                 },
@@ -102,7 +96,7 @@ def create_bubble(index, title, url, artist=None):
                     "style": "secondary",
                     "action": {
                         "type": "message",
-                        "label": "➕ เพิ่มใน Playlist",
+                        "label": "เพิ่มใน Playlist",
                         "text": f"เพิ่ม {title} ใน Playlist"
                     }
                 },
@@ -111,7 +105,7 @@ def create_bubble(index, title, url, artist=None):
                     "style": "secondary",
                     "action": {
                         "type": "message",
-                        "label": "📤 แชร์เพลงนี้",
+                        "label": "แชร์เพลงนี้",
                         "text": f"แชร์เพลง {title}"
                     }
                 }
@@ -119,31 +113,37 @@ def create_bubble(index, title, url, artist=None):
         }
     }
 
-# ฟังก์ชันเมื่อมีข้อความเข้ามา
+# ฟังก์ชันจัดการข้อความที่ได้รับจากผู้ใช้
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_message = event.message.text
+    user_id = event.source.user_id  # ได้ User ID ของผู้ใช้
 
-    # ตรวจสอบการรับคำตอบจาก Gemini
+    print(f"Received message: {user_message} from {user_id}")
+
+    # ส่งข้อความที่ผู้ใช้ถามไปยัง Gemini API เพื่อขอคำตอบ
     answer = generate_answer(user_message)
-    matches = re.findall(
-        r'ชื่อเพลง[:\\-]?\\s*(.*?)\\s*ศิลปิน[:\\-]?\\s*(.*?)\\s*ลิงก์[:\\-]?\\s*(https?://[^\\s]+)', 
-        answer
-    )
-
-    if not matches:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="ไม่พบเพลงในคำตอบ"))
-        return
-
-    # สร้าง Bubble สำหรับเพลงที่ได้จาก Gemini
-    bubbles = [
-        create_bubble(i + 1, title.strip(), url.strip(), artist.strip())
-        for i, (title, artist, url) in enumerate(matches[:10])
+    
+    # สมมติว่าได้รับข้อมูลเพลงจากคำตอบของ Gemini API
+    # ตัวอย่างข้อมูลเพลง (ในทางปฏิบัติจะดึงข้อมูลจาก Gemini API)
+    songs = [
+        {"title": "ถ้าเธอรักใครคนหนึ่ง", "artist": "Ink Waruntorn", "url": "https://www.youtube.com/watch?v=fGqMMW57EaM"},
+        {"title": "ก่อนฤดูฝน", "artist": "The TOYS", "url": "https://www.youtube.com/watch?v=Gj-zGC-X4j0"},
+        {"title": "ภาวนา", "artist": "MEAN", "url": "https://www.youtube.com/watch?v=w4y7eQ59_Kk"}
     ]
-    carousel = {"type": "carousel", "contents": bubbles}
+    
+    # สร้าง Flex Bubble สำหรับแสดงข้อมูลเพลงที่ได้รับ
+    bubbles = [create_bubble(i + 1, song["title"], song["url"], song["artist"]) for i, song in enumerate(songs)]
 
-    # ส่ง Flex Message กลับไปยังผู้ใช้
-    flex_message = FlexSendMessage(alt_text="แนะนำเพลงหลายรายการ", contents=carousel)
+    # ส่ง Flex Message ไปยัง LINE
+    flex_message = FlexSendMessage(
+        alt_text="เพลงที่แนะนำ",
+        contents={
+            "type": "carousel",
+            "contents": bubbles
+        }
+    )
+    
     line_bot_api.reply_message(event.reply_token, flex_message)
 
 # Webhook URL สำหรับรับข้อความจาก LINE
